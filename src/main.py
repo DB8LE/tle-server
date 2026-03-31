@@ -1,0 +1,66 @@
+import argparse
+import os
+from datetime import timedelta
+
+from . import custom_logging
+from .api import API
+from .sources import read_sources
+from .database import Database
+
+
+def main():
+    # Set up logging
+    custom_logging.set_up_logging()
+
+    # Parse commandline arguments
+    parser = argparse.ArgumentParser(prog="tle-server")
+    parser.add_argument(
+        "--debug", action="store_true", help="Set logging level to debug"
+    )
+    parser.add_argument(
+        "-c",
+        "--conf-path",
+        dest="conf_path",
+        help="Directory containing sources configuration and database (default: ./)",
+    )
+    parser.add_argument(
+        "-t",
+        "--element-ttl",
+        dest="element_ttl",
+        help="Cached element time-to-live in hours (default: 2h)",
+    )
+    args = parser.parse_args()
+
+    config_path = args.conf_path if args.conf_path else "./"
+    element_ttl = (
+        timedelta(hours=int(args.element_ttl))
+        if args.element_ttl
+        else timedelta(hours=2)
+    )
+
+    if args.debug:
+        custom_logging.set_debug()
+
+    database_path = os.path.join(config_path, "database.db")
+    sources_path = os.path.join(config_path, "sources.toml")
+
+    database_empty = not os.path.exists(database_path)
+    db = Database(database_path)
+
+    sources = read_sources(sources_path)
+
+    # If database was newly created, download all elements on first run
+    if database_empty:
+        for source in sources:
+            elements = source.fetch()
+            db.insert_elements(elements)
+
+    api = API(
+        host="localhost",
+        port=5000,
+        element_ttl=element_ttl,
+        database=db,
+        sources=sources,
+    )
+
+    api.run()

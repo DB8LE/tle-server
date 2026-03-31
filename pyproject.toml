@@ -1,0 +1,28 @@
+[project]
+name = "tle-server"
+version = "0.1.0"
+description = "Aggregate and cache TLE data"
+license = "GPL-3.0-or-later"
+license-files = ["LICENSE"]
+authors = [
+    {name = "DB8LE",email = "db8le@darc.de"}
+]
+readme = "README.md"
+requires-python = "<4.0,>=3.10"
+dependencies = ["requests (>=2.33.1,<3.0.0)", "flask (>=3.1.3,<4.0.0)"]
+
+[project.optional-dependencies]
+journal = ["systemd-python"]
+
+[tool.poetry.dependencies]
+colorama = { version = ">=0.4.6,<0.5.0", markers = "sys_platform == 'win32'" }
+
+[tool.poetry]
+packages = [{ include = "src" }]
+
+[tool.poetry.scripts]
+tle-server = "src.main:main"
+
+[build-system]
+requires = ["poetry-core>=2.0.0,<3.0.0"]
+build-backend = "poetry.core.masonry.api"
