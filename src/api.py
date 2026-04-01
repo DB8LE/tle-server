@@ -35,37 +35,39 @@ class API:
         # TODO: Maybe optimise this algorithm to get the most efficient sources list to download all elements that are too old
         start_time = time.time()
         while (time.time() - start_time) < timeout:
+            download_times = self.database.get_download_times(norad_ids)
             for id in norad_ids:
-                elements = self.database.get_elements([id])
-                if len(elements) == 0:  # More than 1 result isn't possible
+                if len(download_times) == 0:  # More than 1 result isn't possible
                     logging.debug(
                         f"Element for NORAD ID {id} isn't available in database, skipping"
                     )
                     continue
-                element = elements[0]
 
-                age = datetime.now(timezone.utc) - element.download_time
+                download_time, source_name = download_times[int(id)]
+                age = datetime.now(timezone.utc) - download_time
                 if age > self.element_ttl:
                     # Find elements source
-                    if element.source_name not in self.sources.keys():
+                    if source_name not in self.sources.keys():
                         logging.error(
-                            f"Element for NORAD ID {element.norad_id} contains source name not in sources list"
+                            f"Element for NORAD ID {id} contains source name not in sources list"
                         )
                         return []
-                    source = self.sources[element.source_name]
+                    source = self.sources[source_name]
 
                     # Re-download the source
                     logging.info(
-                        f"Redownloading source {element.source_name} because element for NORAD ID {element.norad_id} is beyond ttl"
+                        f"Redownloading source {source_name} because element for NORAD ID {id} is beyond ttl"
                     )
-                    elements = source.fetch()
-                    self.database.insert_elements(elements)
+                    self.database.insert_elements(source.fetch())
 
                     # Restart check
                     break
 
             # All elements are up-to-date
             return self.database.get_elements(norad_ids)
+
+        logging.warning("Couldn't download all required sources in time")
+        return []
 
     def elements(self):
         norad_ids = request.args.getlist("norad")

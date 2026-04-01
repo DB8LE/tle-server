@@ -1,7 +1,7 @@
 import logging
 import sqlite3
 from datetime import datetime
-from typing import List
+from typing import Dict, List, Tuple
 from .element import Element
 
 CREATE_TABLE_SQL = """
@@ -34,10 +34,6 @@ INSERT OR REPLACE INTO elements (
     drag_term, mean_motion_dot, mean_motion_ddot, rev_at_epoch,
     ephemeris_type, classification_type, element_set_nr, name
 ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-"""
-
-GET_ELEMENTS_SQL = """
-
 """
 
 
@@ -100,5 +96,26 @@ class Database:
             element.epoch = datetime.fromisoformat(element.epoch)
             element.download_time = datetime.fromisoformat(element.download_time)
             out.append(element)
+
+        return out
+
+    def get_download_times(
+        self, norad_ids: List[int]
+    ) -> Dict[int, Tuple[datetime, str]]:
+        logging.debug(f"Getting {len(norad_ids)} download times from database")
+
+        placeholders = ",".join(["?"] * len(norad_ids))
+
+        cur = self.conn.cursor()
+        cur.execute(
+            f"SELECT norad_id, download_time, source_name FROM elements WHERE norad_id IN ({placeholders})",
+            norad_ids,
+        )
+        results = cur.fetchall()
+        cur.close()
+
+        out = {}
+        for result in results:
+            out[result[0]] = (datetime.fromisoformat(result[1]), result[2])
 
         return out
