@@ -6,6 +6,7 @@ from datetime import timedelta
 
 from . import custom_logging
 from .api import API
+from .groups import read_groups
 from .sources import read_sources
 from .database import Database
 
@@ -44,11 +45,13 @@ def main():
         custom_logging.set_debug()
 
     database_path = os.path.join(config_path, "database.db")
+    groups_path = os.path.join(config_path, "groups.toml")
     sources_path = os.path.join(config_path, "sources.toml")
 
     database_empty = not os.path.exists(database_path)
     db = Database(database_path)
 
+    groups = read_groups(groups_path)
     sources = read_sources(sources_path)
 
     # If database was newly created, download all elements on first run
@@ -69,6 +72,7 @@ def main():
         port=5000,
         element_ttl=element_ttl,
         database=db,
+        groups=groups,
         sources=sources,
     )
 

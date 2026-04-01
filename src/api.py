@@ -1,7 +1,7 @@
 import logging
 import time
 from datetime import datetime, timedelta, timezone
-from typing import List
+from typing import Dict, List
 from flask import Flask, jsonify, request
 from .database import Database
 from .element import Element
@@ -15,12 +15,14 @@ class API:
         port: int,
         element_ttl: timedelta,
         database: Database,
+        groups: Dict[str, List[int]],
         sources: List[Source],
     ):
         self.host = host
         self.port = port
         self.element_ttl = element_ttl
         self.database = database
+        self.groups = groups
 
         self.sources = {}
         for source in sources:
@@ -70,6 +72,7 @@ class API:
         return []
 
     def elements(self):
+        groups = request.args.getlist("group")
         norad_ids = request.args.getlist("norad")
         format = request.args.get("format")
 
@@ -77,8 +80,16 @@ class API:
         if not format:
             return "ERROR: Missing required parameter format", 400
 
-        if len(norad_ids) == 0:
-            return "ERROR: Must specify at least one norad id", 400
+        if (len(norad_ids) == 0) and (len(groups) == 0):
+            return "ERROR: Must specify at least one group or norad id", 400
+
+        # Resolve groups to NORAD IDs
+        for group in groups:
+            if group not in self.groups.keys():
+                return f"ERROR: Invalid group '{group}'", 404
+
+            ids = self.groups[group]
+            norad_ids.extend(ids)
 
         # Make DB request
         elements = self._get_elements(norad_ids)
