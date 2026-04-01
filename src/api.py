@@ -92,6 +92,12 @@ class API:
                 out.append(element.to_omm_json())
 
             return jsonify(out)
+        elif format == "tle":
+            out = ""
+            for element in elements:
+                tle = element.to_tle()
+                out += "" if tle is None else tle
+            return f"<pre>{out.strip()}</pre>"
         else:
             return "ERROR: Invalid format", 400
 

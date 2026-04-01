@@ -1,5 +1,7 @@
 import argparse
+import logging
 import os
+import time
 from datetime import timedelta
 
 from . import custom_logging
@@ -51,9 +53,16 @@ def main():
 
     # If database was newly created, download all elements on first run
     if database_empty:
+        start_time = time.time()
+        element_count = 0
         for source in sources:
             elements = source.fetch()
             db.insert_elements(elements)
+            element_count += len(elements)
+        run_time = time.time() - start_time
+        logging.info(
+            f"Downloaded {element_count} elements from all sources in {round(run_time * 1000, 1)}ms"
+        )
 
     api = API(
         host="localhost",

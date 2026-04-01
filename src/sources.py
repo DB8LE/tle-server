@@ -2,6 +2,7 @@ import json
 import logging
 import requests
 import tomllib
+import traceback
 from datetime import datetime, timezone
 from typing import List, Literal, Optional
 from .element import Element
@@ -26,9 +27,9 @@ class Source:
             return None
 
         try:
+            download_time = datetime.now(timezone.utc)
             if self.data_type == "omm_json":
                 data = json.loads(data)
-                download_time = datetime.now(timezone.utc)
                 if type(data) is list:
                     out = []
                     for tle in data:
@@ -39,6 +40,40 @@ class Source:
                 else:
                     logging.error(f"Source {self.name} returned invalid json type")
                     return None
+            elif self.data_type == "tle":
+                lines = data.splitlines()
+
+                out = []
+                skip = False
+                name_line = ""
+                for i, line in enumerate(lines):
+                    if skip:
+                        skip = False
+                        continue
+
+                    # Skip empty lines
+                    if len(line.strip()) == 0:
+                        name_line = ""
+                        continue
+
+                    # Length of 69 is a data line
+                    if len(line) == 69:
+                        line1 = line.strip()
+                        line2 = lines[i + 1].strip()
+                        skip = True
+
+                        tle_lines = [line1, line2]
+                        if name_line != "":
+                            tle_lines.insert(0, name_line)
+                            name_line = ""
+
+                        out.append(
+                            Element.from_tle(tle_lines, self.name, download_time)
+                        )
+                    else:  # Assume a name line
+                        name_line = line.strip()
+
+                return out
             else:
                 logging.error(
                     f"Invalid data type '{self.data_type}' for source {self.name}"
@@ -48,6 +83,7 @@ class Source:
             logging.error(
                 f"Exception while parsing TLE data from source {self.name}: {e}"
             )
+            logging.debug(traceback.format_exc())
             return None
 
 
@@ -57,7 +93,7 @@ def read_sources(file_path: str) -> List[Source]:
 
     ```
     [name]
-    data_type = ".." # Choices: omm_json
+    data_type = ".." # Choices: omm_json, tle
     url = "https://example.com/"
     ...
     ```

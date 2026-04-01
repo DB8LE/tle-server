@@ -1,5 +1,18 @@
-from datetime import datetime
-from typing import Any, Dict, Optional, Self
+import logging
+from datetime import datetime, timedelta
+from typing import Any, Dict, List, Optional, Self
+
+
+def tle_checksum(line: str) -> bool:
+    total = 0
+
+    for c in line[:68]:
+        if c.isdigit():
+            total += int(c)
+        elif c == "-":
+            total += 1
+
+    return total % 10
 
 
 # Should this be SoA instead of AoS?
@@ -96,3 +109,115 @@ class Element:
             out["OBJECT_NAME"] = self.name
 
         return out
+
+    @classmethod
+    def from_tle(
+        cls, tle: str | List[str], source_name: str, download_time: datetime
+    ) -> Self:
+        lines = tle
+        if type(lines) is not list:
+            lines = tle.strip().splitlines()
+
+        name = None
+        if len(lines) == 3:
+            name = lines[0].strip()
+            lines.pop(0)
+
+        # Verify checksum
+        for i, line in enumerate(lines):
+            if not (tle_checksum(line) == int(line[68])):
+                logging.warning(
+                    f"TLE line {i + 1} from source {source_name} failed checksum verification, attempting to parse anyway"
+                )
+
+        # Extract data
+        intdes_year = int(lines[0][9:11])
+        intdes_year = intdes_year + 2000 if intdes_year < 57 else intdes_year + 1900
+        intdes = str(intdes_year) + "-" + lines[0][11:17]
+
+        epoch_year = int(lines[0][18:20])
+        epoch_year = epoch_year + 2000 if epoch_year < 57 else epoch_year + 1900
+        epoch_doy = float(lines[0][20:32])
+        epoch_dt = datetime(epoch_year, 1, 1)
+        epoch_dt += timedelta(days=epoch_doy - 1)
+
+        drag_term = lines[0][54:61]
+        drag_term_seperator = "-" if "-" in drag_term else "+"
+        drag_term, zeros = drag_term.split(drag_term_seperator)
+        drag_term = float("0." + ("0" * int(zeros)) + drag_term)
+
+        mean_motion_dot = lines[0][33:43].strip()
+        if mean_motion_dot.startswith("-"):
+            mean_motion_dot = -float("0" + mean_motion_dot[1:])
+        else:
+            mean_motion_dot = float("0" + mean_motion_dot)
+
+        return cls(
+            source_name,
+            download_time,
+            int(lines[0][2:7]),  # norad id
+            intdes,
+            epoch_dt,
+            float(lines[1][52:63]),  # mean motion
+            float("0." + lines[1][26:33]),  # eccentricity
+            float(lines[1][8:16]),  # inclination
+            float(lines[1][17:25]),  # ra of asc node
+            float(lines[1][34:42]),  # arg of pericenter
+            float(lines[1][43:51]),  # mean anomaly
+            drag_term,
+            mean_motion_dot,  # mean motion dot
+            0,  # mean motion ddot
+            int(lines[1][63:68]),  # rev at epoch
+            int(lines[0][62]),  # ephemeris type
+            lines[0][7],  # classification type
+            int(lines[0][64:68]),  # element set nr
+            name=name,
+        )
+
+    def to_tle(self) -> Optional[str]:
+        if len(str(self.norad_id)) > 5:
+            logging.warning(
+                f"Can't generate TLE for element with NORAD ID {self.norad_id} since NORAD ID is longer than 5 digits"
+            )
+            return None
+
+        lines = []
+
+        # Format first data line
+        norad_id = str(self.norad_id).zfill(5)[:5]
+
+        epoch_year_start = datetime(self.epoch.year, 1, 1)
+        epoch_doy = (self.epoch - epoch_year_start).total_seconds() / 86400.0
+        epoch_doy += 1
+        epoch_doy = str(round(epoch_doy, 8)).zfill(12)
+
+        drag_term_fmt = f"{self.drag_term:.4e}"
+        drag_decimal, drag_exponent = drag_term_fmt.split("e")
+        drag_exponent = int(drag_exponent) + 1
+        drag_decimal = drag_decimal.replace(".", "")[:5].ljust(5, "0")
+        drag_sign = "-" if drag_exponent < 0 else "+"
+        drag_term = f"{drag_decimal}{drag_sign}{abs(drag_exponent)}"
+
+        lines.append(
+            f"1 {norad_id}{self.classification_type[0]} {str(self.object_id)[2:4]}{self.object_id[5:].rjust(6)} "
+            + f"{str(self.epoch.year)[-2:]}{epoch_doy} {'-' if self.mean_motion_dot < 0 else ' '}.{format(abs(self.mean_motion_dot), '.8f')[2:]} "
+            + f" 00000+0  {drag_term} {self.ephemeris_type}  {str(self.element_set_nr)[-3:]}"
+        )
+
+        # Format second data line
+        lines.append(
+            f"2 {norad_id} {str(format(self.inclination, '.4f')).rjust(8)} {str(format(self.ra_asc_node, '.4f')).rjust(8)} "
+            + f"{format(self.eccentricity, '.7f')[2:]} {str(format(self.argument_pericenter, '.4f')).rjust(8)} "
+            + f"{str(format(self.mean_anomaly, '.4f')).rjust(8)} {str(round(self.mean_motion, 8)).ljust(11, '0')}"
+            + f"{str(self.rev_at_epoch)[-5:].rjust(5)}"
+        )
+
+        # Add checksum
+        for i in range(len(lines)):
+            lines[i] += str(tle_checksum(lines[i]))
+
+        # Add name line if available
+        if self.name is not None:
+            lines.insert(0, self.name[:24].ljust(24))
+
+        return "\n".join(lines) + "\n"
