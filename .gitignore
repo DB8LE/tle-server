@@ -3,5 +3,6 @@ __pycache__/
 *.py[cod]
 *$py.class
 
+groups.toml
 sources.toml
 database.db

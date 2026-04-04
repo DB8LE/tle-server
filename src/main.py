@@ -27,6 +27,16 @@ def main():
         help="Directory containing sources configuration and database (default: ./)",
     )
     parser.add_argument(
+        "-a",
+        "--host",
+        help="Host address of API (default: localhost)",
+    )
+    parser.add_argument(
+        "-p",
+        "--port",
+        help="Port of API (default: 5000)",
+    )
+    parser.add_argument(
         "-t",
         "--element-ttl",
         dest="element_ttl",
@@ -67,9 +77,12 @@ def main():
             f"Downloaded {element_count} elements from all sources in {round(run_time * 1000, 1)}ms"
         )
 
+    api_host = args.host if args.host else "localhost"
+    api_port = args.port if args.port else 5000
+
     api = API(
-        host="localhost",
-        port=5000,
+        host=api_host,
+        port=api_port,
         element_ttl=element_ttl,
         database=db,
         groups=groups,
