@@ -58,20 +58,19 @@ def main():
     groups_path = os.path.join(config_path, "groups.toml")
     sources_path = os.path.join(config_path, "sources.toml")
 
-    database_empty = not os.path.exists(database_path)
-    db = Database(database_path)
-
-    groups = read_groups(groups_path)
+    groups, source_groups = read_groups(groups_path)
     sources = read_sources(sources_path)
+
+    database_empty = not os.path.exists(database_path)
+    db = Database(database_path, source_groups)
 
     # If database was newly created, download all elements on first run
     if database_empty:
         start_time = time.time()
         element_count = 0
         for source in sources:
-            elements = source.fetch()
-            db.insert_elements(elements)
-            element_count += len(elements)
+            count = db.update_from_source(source)
+            element_count += count
         run_time = time.time() - start_time
         logging.info(
             f"Downloaded {element_count} elements from all sources in {round(run_time * 1000, 1)}ms"

@@ -3,3 +3,6 @@ norad_ids = [
   4793,
   6920
 ]
+
+[inherited_group]
+inherit_sources = [ "test" ]

@@ -1,5 +1,6 @@
 import logging
 import time
+from collections import defaultdict
 from datetime import datetime, timedelta, timezone
 from typing import Dict, List
 from flask import Flask, jsonify, request
@@ -22,7 +23,7 @@ class API:
         self.port = port
         self.element_ttl = element_ttl
         self.database = database
-        self.groups = groups
+        self.base_groups = groups
 
         self.sources = {}
         for source in sources:
@@ -30,8 +31,25 @@ class API:
 
         self.app = Flask("tle-server")
 
+        self.inherited_groups = {}
+        self.groups = groups # Updated with inherited_groups on first _update_groups / _get_elements run
+
         # Register routes
         self.app.add_url_rule("/elements", "elements", self.elements, methods=["GET"])
+
+    def _update_groups(self):
+        self.inherited_groups = self.database.get_inherited_groups()
+
+        # Merge base and inherited groups
+        merged_dict = defaultdict(list)
+
+        for d in (self.base_groups, self.inherited_groups):
+            for name, ids in d.items():
+                merged_dict[name].extend(ids)
+
+        self.groups = dict(merged_dict)
+
+        logging.debug(f"Updated groups. Available groups: {self.groups.keys()}")
 
     def _get_elements(self, norad_ids: List[int], timeout: int = 10) -> List[Element]:
         # TODO: Maybe optimise this algorithm to get the most efficient sources list to download all elements that are too old
@@ -60,19 +78,20 @@ class API:
                     logging.info(
                         f"Redownloading source {source_name} because element for NORAD ID {id} is beyond ttl"
                     )
-                    self.database.insert_elements(source.fetch())
+                    self.database.update_from_source(source)
 
                     # Restart check
                     break
 
             # All elements are up-to-date
+            self._update_groups()
             return self.database.get_elements(norad_ids)
 
         logging.warning("Couldn't download all required sources in time")
         return []
 
     def elements(self):
-        groups = request.args.getlist("group")
+        filter_groups = request.args.getlist("group")
         norad_ids = request.args.getlist("norad")
         format = request.args.get("format")
 
@@ -80,11 +99,11 @@ class API:
         if not format:
             return "ERROR: Missing required parameter format", 400
 
-        if (len(norad_ids) == 0) and (len(groups) == 0):
+        if (len(norad_ids) == 0) and (len(filter_groups) == 0):
             return "ERROR: Must specify at least one group or norad id", 400
 
         # Resolve groups to NORAD IDs
-        for group in groups:
+        for group in filter_groups:
             if group not in self.groups.keys():
                 return f"ERROR: Invalid group '{group}'", 404
 

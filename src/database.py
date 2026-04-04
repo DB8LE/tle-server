@@ -1,10 +1,12 @@
 import logging
 import sqlite3
+from collections import defaultdict
 from datetime import datetime
-from typing import Dict, List, Tuple
+from typing import Dict, List, Optional, Tuple
 from .element import Element
+from .sources import Source
 
-CREATE_TABLE_SQL = """
+CREATE_ELEMENTS_TABLE_SQL = """
 CREATE TABLE IF NOT EXISTS elements(
     source_name TEXT,
     download_time TEXT,
@@ -27,6 +29,13 @@ CREATE TABLE IF NOT EXISTS elements(
     name TEXT
 )"""
 
+CREATE_GROUPS_TABLE_SQL = """
+CREATE TABLE IF NOT EXISTS inherited_groups(
+    norad_id INT,
+    group_name TEXT,
+    PRIMARY KEY (norad_id, group_name)
+)"""
+
 INSERT_ELEMENTS_SQL = """
 INSERT OR REPLACE INTO elements (
     source_name, download_time, norad_id, object_id, epoch, mean_motion,
@@ -38,11 +47,14 @@ INSERT OR REPLACE INTO elements (
 
 
 class Database:
-    def __init__(self, path: str):
+    def __init__(self, path: str, source_groups: Optional[Dict[str, List[str]]]):
+        self.source_groups = source_groups
+
         self.conn = sqlite3.connect(path, check_same_thread=False)
 
         cur = self.conn.cursor()
-        cur.execute(CREATE_TABLE_SQL)
+        cur.execute(CREATE_ELEMENTS_TABLE_SQL)
+        cur.execute(CREATE_GROUPS_TABLE_SQL)
         cur.close()
         self.conn.commit()
 
@@ -119,3 +131,37 @@ class Database:
             out[result[0]] = (datetime.fromisoformat(result[1]), result[2])
 
         return out
+
+    def insert_inherited_groups(self, groups: List[Tuple[int, str]]):
+        cur = self.conn.cursor()
+        cur.executemany("INSERT INTO inherited_groups (norad_id, group_name) VALUES (?, ?)", groups)
+        cur.close()
+
+    def get_inherited_groups(self) -> Dict[str, List[int]]:
+        cur = self.conn.cursor()
+        cur.execute("SELECT norad_id, group_name FROM inherited_groups")
+        results = cur.fetchall()
+        cur.close()
+
+        out = defaultdict(list)
+        for result in results:
+            out[result[1]].append(result[0])
+
+        return dict(out)
+
+    def update_from_source(self, source: Source) -> int:
+        elements = source.fetch()
+
+        # Update inherited groups
+        if self.source_groups is not None:
+            if source.name in self.source_groups.keys():
+                logging.debug("Updating inherited groups")
+                groups = []
+                for element in elements:
+                    for group in self.source_groups[source.name]:
+                        groups.append((element.norad_id, group))
+                self.insert_inherited_groups(groups)
+
+        self.insert_elements(elements)
+
+        return len(elements)
