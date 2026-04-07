@@ -32,7 +32,8 @@ class API:
         self.app = Flask("tle-server")
 
         self.inherited_groups = {}
-        self.groups = groups # Updated with inherited_groups on first _update_groups / _get_elements run
+        self.groups = {}
+        self._update_groups()
 
         # Register routes
         self.app.add_url_rule("/elements", "elements", self.elements, methods=["GET"])
@@ -49,7 +50,7 @@ class API:
 
         self.groups = dict(merged_dict)
 
-        logging.debug(f"Updated groups. Available groups: {self.groups.keys()}")
+        logging.debug(f"Updated groups. Available groups: {list(self.groups.keys())}")
 
     def _get_elements(self, norad_ids: List[int], timeout: int = 10) -> List[Element]:
         # TODO: Maybe optimise this algorithm to get the most efficient sources list to download all elements that are too old
@@ -114,7 +115,7 @@ class API:
         elements = self._get_elements(norad_ids)
 
         if len(elements) == 0:
-            return "ERROR: Not in database", 404
+            return "ERROR: Elements not in database", 404
 
         if format == "omm_json":
             out = []

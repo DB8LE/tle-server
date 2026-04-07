@@ -143,7 +143,9 @@ class Database:
         results = cur.fetchall()
         cur.close()
 
-        out = defaultdict(list)
+        initial_keys = list(set(v for values in self.source_groups.values() for v in values))
+        initial_dict = {key: [] for key in initial_keys}
+        out = defaultdict(list, initial_dict)
         for result in results:
             out[result[1]].append(result[0])
 
@@ -151,6 +153,9 @@ class Database:
 
     def update_from_source(self, source: Source) -> int:
         elements = source.fetch()
+        if elements is None:
+            logging.error(f"Failed to update database from source {source.name}")
+            return 0
 
         # Update inherited groups
         if self.source_groups is not None:
