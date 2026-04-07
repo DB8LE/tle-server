@@ -6,3 +6,7 @@ norad_ids = [
 
 [inherited_group]
 inherit_sources = [ "test" ]
+
+[example_extended]
+copy_groups = [ "example" ]
+norad_ids = [ 6235 ]
