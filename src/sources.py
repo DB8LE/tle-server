@@ -9,7 +9,7 @@ from .element import Element
 
 
 class Source:
-    def __init__(self, name: str, data_type: Literal["omm_json"], url: str):
+    def __init__(self, name: str, data_type: Literal["json"], url: str):
         self.name = name
         self.data_type = data_type
         self.url = url
@@ -28,15 +28,15 @@ class Source:
 
         try:
             download_time = datetime.now(timezone.utc)
-            if self.data_type == "omm_json":
+            if self.data_type == "json":
                 data = json.loads(data)
                 if type(data) is list:
                     out = []
                     for tle in data:
-                        out.append(Element.from_omm_json(tle, self.name, download_time))
+                        out.append(Element.from_json(tle, self.name, download_time))
                     return out
                 elif type(data) is dict:
-                    return [Element.from_omm_json(data, self.name, download_time)]
+                    return [Element.from_json(data, self.name, download_time)]
                 else:
                     logging.error(f"Source {self.name} returned invalid json type")
                     return None
@@ -93,7 +93,7 @@ def read_sources(file_path: str) -> List[Source]:
 
     ```
     [name]
-    data_type = ".." # Choices: omm_json, tle
+    data_type = ".." # Choices: json, tle
     url = "https://example.com/"
     ...
     ```

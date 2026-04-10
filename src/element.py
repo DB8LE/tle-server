@@ -60,7 +60,7 @@ class Element:
         self.name = name
 
     @classmethod
-    def from_omm_json(
+    def from_json(
         cls, omm: Dict[str, Any], source_name: str, download_time: datetime
     ) -> Self:
         return cls(
@@ -85,7 +85,7 @@ class Element:
             name=omm.get("OBJECT_NAME"),
         )
 
-    def to_omm_json(self) -> Dict[str, Any]:
+    def to_json(self) -> Dict[str, Any]:
         out = {
             "NORAD_CAT_ID": self.norad_id,
             "OBJECT_ID": self.object_id,

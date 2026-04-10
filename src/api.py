@@ -117,10 +117,10 @@ class API:
         if len(elements) == 0:
             return "ERROR: Elements not in database", 404
 
-        if format == "omm_json":
+        if format == "json":
             out = []
             for element in elements:
-                out.append(element.to_omm_json())
+                out.append(element.to_json())
 
             return jsonify(out)
         elif format == "tle":
