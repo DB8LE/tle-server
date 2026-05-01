@@ -129,6 +129,12 @@ class API:
                 tle = element.to_tle()
                 out += "" if tle is None else tle
             return f"<pre>{out.strip()}</pre>"
+        elif format == "csv":
+            out = "OBJECT_NAME,OBJECT_ID,EPOCH,MEAN_MOTION,ECCENTRICITY,INCLINATION,RA_OF_ASC_NODE,ARG_OF_PERICENTER,MEAN_ANOMALY,EPHEMERIS_TYPE,CLASSIFICATION_TYPE,NORAD_CAT_ID,ELEMENT_SET_NO,REV_AT_EPOCH,BSTAR,MEAN_MOTION_DOT,MEAN_MOTION_DDOT\n"
+            for element in elements:
+                out = out + element.to_csv() + "\n"
+
+            return f"<pre>{out.strip()}</pre>"
         else:
             return "ERROR: Invalid format", 400
 

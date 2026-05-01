@@ -74,6 +74,20 @@ class Source:
                         name_line = line.strip()
 
                 return out
+            elif self.data_type == "csv":
+                lines = data.splitlines()
+                keys_line = lines[0]
+
+                out = []
+                for line in lines[1:]:
+                    if len(line) < 3:
+                        continue
+
+                    element = Element.from_csv(keys_line, line, self.name, download_time)
+                    if element is not None:
+                        out.append(element)
+
+                return out
             else:
                 logging.error(
                     f"Invalid data type '{self.data_type}' for source {self.name}"
@@ -93,7 +107,7 @@ def read_sources(file_path: str) -> List[Source]:
 
     ```
     [name]
-    data_type = ".." # Choices: json, tle
+    data_type = ".." # Choices: csv, json, tle
     url = "https://example.com/"
     ...
     ```

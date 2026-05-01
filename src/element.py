@@ -1,6 +1,6 @@
 import logging
 from datetime import datetime, timedelta
-from typing import Any, Dict, List, Optional, Self
+from typing import Any, Dict, List, Optional, Self, Tuple
 
 
 def tle_checksum(line: str) -> bool:
@@ -63,25 +63,25 @@ class Element:
     def from_json(
         cls, omm: Dict[str, Any], source_name: str, download_time: datetime
     ) -> Self:
-        return cls(
+        return cls( # TODO: Handle KeyError
             source_name,
             download_time,
             omm["NORAD_CAT_ID"],
             omm["OBJECT_ID"],
-            omm["EPOCH"],
-            omm["MEAN_MOTION"],
-            omm["ECCENTRICITY"],
-            omm["INCLINATION"],
-            omm["RA_OF_ASC_NODE"],
-            omm["ARG_OF_PERICENTER"],
-            omm["MEAN_ANOMALY"],
-            omm["BSTAR"],
-            omm["MEAN_MOTION_DOT"],
-            omm["MEAN_MOTION_DDOT"],
-            omm["REV_AT_EPOCH"],
+            datetime.fromisoformat(omm["EPOCH"]),
+            float(omm["MEAN_MOTION"]),
+            float(omm["ECCENTRICITY"]),
+            float(omm["INCLINATION"]),
+            float(omm["RA_OF_ASC_NODE"]),
+            float(omm["ARG_OF_PERICENTER"]),
+            float(omm["MEAN_ANOMALY"]),
+            float(omm["BSTAR"]),
+            float(omm["MEAN_MOTION_DOT"]),
+            float(omm["MEAN_MOTION_DDOT"]),
+            int(omm["REV_AT_EPOCH"]),
             omm["EPHEMERIS_TYPE"],
             omm["CLASSIFICATION_TYPE"],
-            omm["ELEMENT_SET_NO"],
+            int(omm["ELEMENT_SET_NO"]),
             name=omm.get("OBJECT_NAME"),
         )
 
@@ -89,7 +89,7 @@ class Element:
         out = {
             "NORAD_CAT_ID": self.norad_id,
             "OBJECT_ID": self.object_id,
-            "EPOCH": self.epoch,
+            "EPOCH": self.epoch.isoformat(),
             "MEAN_MOTION": self.mean_motion,
             "ECCENTRICITY": self.eccentricity,
             "INCLINATION": self.inclination,
@@ -221,3 +221,49 @@ class Element:
             lines.insert(0, self.name[:24].ljust(24))
 
         return "\n".join(lines) + "\n"
+
+    @classmethod
+    def from_csv(
+        cls, keys_line: str, data_line: str, source_name: str, download_time: datetime
+    ) -> Optional[Self]:
+
+        # Parse csv lines to dict
+        keys = [k.strip() for k in keys_line.split(",")]
+        values = [v.strip() for v in data_line.split(",")]
+
+        if len(keys) != len(values):
+            logging.warning(
+                f"Failed to parse CSV TLE from source {source_name} since keys line and data line have a mismatching number of elements"
+            )
+            return None
+
+        data = dict(zip(keys, values))
+
+        return cls.from_json(data, source_name, download_time)
+
+    def to_csv(self) -> str:
+        eccentricity = f"{self.eccentricity:g}".upper().replace("0.", ".")
+        drag_term = f"{self.drag_term:g}".upper().replace("0.", ".")
+        mean_motion_dot = f"{self.mean_motion_dot:g}".upper().replace("0.", ".")
+
+        out = ""
+        out += str(self.name) + ","
+        out += str(self.object_id) + ","
+        out += str(self.epoch.isoformat()) + ","
+        out += str(self.mean_motion) + ","
+        out += str(eccentricity) + ","
+        out += str(self.inclination) + ","
+        out += str(self.ra_asc_node) + ","
+        out += str(self.argument_pericenter) + ","
+        out += str(self.mean_anomaly) + ","
+        out += str(self.ephemeris_type) + ","
+        out += str(self.classification_type) + ","
+        out += str(self.norad_id) + ","
+        out += str(self.element_set_nr) + ","
+        out += str(self.rev_at_epoch) + ","
+        out += str(drag_term) + ","
+        out += str(mean_motion_dot) + ","
+        out += str(self.mean_motion_ddot)
+
+        return out
+
