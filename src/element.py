@@ -145,12 +145,16 @@ class Element:
         drag_term_seperator = "-" if "-" in drag_term else "+"
         drag_term, zeros = drag_term.split(drag_term_seperator)
         drag_term = float("0." + ("0" * int(zeros)) + drag_term)
+        if lines[0][53] == "-":
+            drag_term *= -1
 
         mean_motion_dot = lines[0][33:43].strip()
         if mean_motion_dot.startswith("-"):
             mean_motion_dot = -float("0" + mean_motion_dot[1:])
         else:
             mean_motion_dot = float("0" + mean_motion_dot)
+
+        mean_motion_ddot = float("0." + lines[0][45:52].replace("-", "e-").replace("+", "e+"))
 
         return cls(
             source_name,
@@ -165,8 +169,8 @@ class Element:
             float(lines[1][34:42]),  # arg of pericenter
             float(lines[1][43:51]),  # mean anomaly
             drag_term,
-            mean_motion_dot,  # mean motion dot
-            0,  # mean motion ddot
+            mean_motion_dot,
+            mean_motion_ddot,
             int(lines[1][63:68]),  # rev at epoch
             int(lines[0][62]),  # ephemeris type
             lines[0][7],  # classification type
@@ -189,26 +193,42 @@ class Element:
         epoch_year_start = datetime(self.epoch.year, 1, 1)
         epoch_doy = (self.epoch - epoch_year_start).total_seconds() / 86400.0
         epoch_doy += 1
-        epoch_doy = str(round(epoch_doy, 8)).zfill(12)
+        epoch_doy = str(round(epoch_doy, 8)).ljust(12, "0")
 
-        drag_term_fmt = f"{self.drag_term:.4e}"
-        drag_decimal, drag_exponent = drag_term_fmt.split("e")
-        drag_exponent = int(drag_exponent) + 1
-        drag_decimal = drag_decimal.replace(".", "")[:5].ljust(5, "0")
-        drag_sign = "-" if drag_exponent < 0 else "+"
-        drag_term = f"{drag_decimal}{drag_sign}{abs(drag_exponent)}"
+        if self.mean_motion_ddot == 0:
+            mean_motion_ddot = "00000+0"
+        else:
+            ddot_sci = f"{self.mean_motion_ddot:.{4}e}"
+            ddot_decimal, ddot_exponent = ddot_sci.split("e")
+            ddot_decimal = ddot_decimal.replace(".", "")
+            ddot_exponent = int(ddot_exponent) + 1
+            mean_motion_ddot = f"{ddot_decimal}{ddot_exponent:+d}"#.replace("+", "")
+
+        if self.drag_term == 0:
+            drag_term = " 00000+0"
+        else:
+            drag_term_fmt = f"{abs(self.drag_term):.4e}"
+            drag_decimal, drag_exponent = drag_term_fmt.split("e")
+            drag_exponent = int(drag_exponent) + 1
+            drag_decimal = drag_decimal.replace(".", "")[:5].ljust(5, "0")
+            drag_exp_sign = "-" if drag_exponent < 0 else "+"
+            drag_term = f"{" " if self.drag_term >= 0 else "-"}{drag_decimal}{drag_exp_sign}{abs(drag_exponent)}"
 
         lines.append(
-            f"1 {norad_id}{self.classification_type[0]} {str(self.object_id)[2:4]}{self.object_id[5:].rjust(6)} "
+            f"1 {norad_id}{self.classification_type[0]} {str(self.object_id)[2:4]}{self.object_id[5:].ljust(6)} "
             + f"{str(self.epoch.year)[-2:]}{epoch_doy} {'-' if self.mean_motion_dot < 0 else ' '}.{format(abs(self.mean_motion_dot), '.8f')[2:]} "
-            + f" 00000+0  {drag_term} {self.ephemeris_type}  {str(self.element_set_nr)[-3:]}"
+            + f" {mean_motion_ddot} {drag_term} {self.ephemeris_type}  {str(self.element_set_nr)[-3:]}"
         )
 
         # Format second data line
+        mean_motion = str(round(self.mean_motion, 8))
+        mean_motion = (" " if len(str(int(self.mean_motion))) < 2 else "") + mean_motion
+        mean_motion = mean_motion.ljust(11, '0')
+
         lines.append(
             f"2 {norad_id} {str(format(self.inclination, '.4f')).rjust(8)} {str(format(self.ra_asc_node, '.4f')).rjust(8)} "
             + f"{format(self.eccentricity, '.7f')[2:]} {str(format(self.argument_pericenter, '.4f')).rjust(8)} "
-            + f"{str(format(self.mean_anomaly, '.4f')).rjust(8)} {str(round(self.mean_motion, 8)).ljust(11, '0')}"
+            + f"{str(format(self.mean_anomaly, '.4f')).rjust(8)} {mean_motion}"
             + f"{str(self.rev_at_epoch)[-5:].rjust(5)}"
         )
 
