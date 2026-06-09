@@ -14,6 +14,8 @@ class Source:
         self.data_type = data_type
         self.url = url
 
+        self.last_fetched = datetime.utcfromtimestamp(0)
+
     def fetch(self) -> Optional[List[Element]]:
         logging.debug(
             f"Attempting to fetch elements with type {self.data_type} from {self.url}"
@@ -28,22 +30,20 @@ class Source:
 
         try:
             download_time = datetime.now(timezone.utc)
+            out = []
             if self.data_type == "json":
                 data = json.loads(data)
                 if type(data) is list:
-                    out = []
                     for tle in data:
                         out.append(Element.from_json(tle, self.name, download_time))
-                    return out
                 elif type(data) is dict:
-                    return [Element.from_json(data, self.name, download_time)]
+                    out = [Element.from_json(data, self.name, download_time)]
                 else:
                     logging.error(f"Source {self.name} returned invalid json type")
                     return None
             elif self.data_type == "tle":
                 lines = data.splitlines()
 
-                out = []
                 skip = False
                 name_line = ""
                 for i, line in enumerate(lines):
@@ -72,13 +72,10 @@ class Source:
                         )
                     else:  # Assume a name line
                         name_line = line.strip()
-
-                return out
             elif self.data_type == "csv":
                 lines = data.splitlines()
                 keys_line = lines[0]
 
-                out = []
                 for line in lines[1:]:
                     if len(line) < 3:
                         continue
@@ -86,13 +83,14 @@ class Source:
                     element = Element.from_csv(keys_line, line, self.name, download_time)
                     if element is not None:
                         out.append(element)
-
-                return out
             else:
                 logging.error(
                     f"Invalid data type '{self.data_type}' for source {self.name}"
                 )
                 return None
+
+            self.last_fetched = download_time
+            return out
         except Exception as e:
             logging.error(
                 f"Exception while parsing TLE data from source {self.name}: {e}"

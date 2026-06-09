@@ -37,6 +37,7 @@ class API:
 
         # Register routes
         self.app.add_url_rule("/elements", "elements", self.elements, methods=["GET"])
+        self.app.add_url_rule("/stats", "stats", self.stats, methods=["GET"])
 
     def _update_groups(self):
         self.inherited_groups = self.database.get_inherited_groups()
@@ -139,6 +140,19 @@ class API:
             return "ERROR: Invalid format", 400
 
         return f"{norad_ids} {format}"
+
+    def stats(self):
+        sources = {}
+        for name, source in self.sources.items():
+            sources[name] = {"url": source.url, "last_fetched": source.last_fetched.timestamp()}
+
+        stats = {}
+
+        stats["element_count"] = self.database.get_element_count()
+        stats["groups"] = self.groups
+        stats["sources"] = sources
+
+        return jsonify(stats)
 
     def run(self):
         self.app.run(host=self.host, port=self.port)

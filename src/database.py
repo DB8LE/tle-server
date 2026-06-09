@@ -170,3 +170,11 @@ class Database:
         self.insert_elements(elements)
 
         return len(elements)
+
+    def get_element_count(self) -> int:
+        cur = self.conn.cursor()
+        cur.execute("SELECT COUNT(*) FROM elements")
+        count = cur.fetchone()[0]
+        cur.close()
+
+        return int(count)
