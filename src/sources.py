@@ -14,7 +14,8 @@ class Source:
         self.data_type = data_type
         self.url = url
 
-        self.last_fetched = datetime.utcfromtimestamp(0)
+        # TODO: Store this in DB?
+        self.last_fetched = datetime.fromtimestamp(0, tz=timezone.utc)
 
     def fetch(self) -> Optional[List[Element]]:
         logging.debug(
