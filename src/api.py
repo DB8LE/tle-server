@@ -3,8 +3,8 @@ import time
 from collections import defaultdict
 from datetime import datetime, timedelta, timezone
 from typing import Dict, List
-from flask import Flask, jsonify, request
-from .database import Database
+from flask import Flask, g, jsonify, request
+from .database import Database, DatabaseFactory
 from .element import Element
 from .sources import Source
 
@@ -15,14 +15,14 @@ class API:
         host: str,
         port: int,
         element_ttl: timedelta,
-        database: Database,
+        database_factory: DatabaseFactory,
         groups: Dict[str, List[int]],
         sources: List[Source],
     ):
         self.host = host
         self.port = port
         self.element_ttl = element_ttl
-        self.database = database
+        self.database_factory = database_factory
         self.base_groups = groups
 
         self.sources = {}
@@ -30,17 +30,33 @@ class API:
             self.sources[source.name] = source
 
         self.app = Flask("tle-server")
+        self.app.teardown_appcontext(self._close_database)
 
         self.inherited_groups = {}
         self.groups = {}
-        self._update_groups()
+
+        # Temporary connection to read inherited groups
+        db = self.database_factory.get_database()
+        self._update_groups(db)
+        db.close()
 
         # Register routes
         self.app.add_url_rule("/elements", "elements", self.elements, methods=["GET"])
         self.app.add_url_rule("/stats", "stats", self.stats, methods=["GET"])
 
-    def _update_groups(self):
-        self.inherited_groups = self.database.get_inherited_groups()
+    def _get_database(self):
+        if "db" not in g:
+            g.db = self.database_factory.get_database()
+
+        return g.db
+
+    def _close_database(self, error=None):
+        database = g.pop("db", None)
+        if database is not None:
+            database.close()
+
+    def _update_groups(self, database: Database):
+        self.inherited_groups = database.get_inherited_groups()
 
         # Merge base and inherited groups
         merged_dict = defaultdict(list)
@@ -57,7 +73,7 @@ class API:
         # TODO: Maybe optimise this algorithm to get the most efficient sources list to download all elements that are too old
         start_time = time.time()
         while (time.time() - start_time) < timeout:
-            download_times = self.database.get_download_times(norad_ids)
+            download_times = self._get_database().get_download_times(norad_ids)
             for id in norad_ids:
                 if len(download_times) == 0:  # More than 1 result isn't possible
                     logging.debug(
@@ -80,14 +96,14 @@ class API:
                     logging.info(
                         f"Redownloading source {source_name} because element for NORAD ID {id} is beyond ttl"
                     )
-                    self.database.update_from_source(source)
+                    self._get_database().update_from_source(source)
 
                     # Restart check
                     break
 
             # All elements are up-to-date
-            self._update_groups()
-            return self.database.get_elements(norad_ids)
+            self._update_groups(self._get_database())
+            return self._get_database().get_elements(norad_ids)
 
         logging.warning("Couldn't download all required sources in time")
         return []
@@ -148,7 +164,7 @@ class API:
 
         stats = {}
 
-        stats["element_count"] = self.database.get_element_count()
+        stats["element_count"] = self._get_database().get_element_count()
         stats["groups"] = self.groups
         stats["sources"] = sources
 

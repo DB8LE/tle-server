@@ -8,7 +8,7 @@ from . import custom_logging
 from .api import API
 from .groups import read_groups
 from .sources import read_sources
-from .database import Database
+from .database import DatabaseFactory
 
 
 def main():
@@ -62,10 +62,12 @@ def main():
     sources = read_sources(sources_path)
 
     database_empty = not os.path.exists(database_path)
-    db = Database(database_path, source_groups)
+    database_factory = DatabaseFactory(database_path, source_groups)
 
     # If database was newly created, download all elements on first run
     if database_empty:
+        db = database_factory.get_database()
+
         start_time = time.time()
         element_count = 0
         for source in sources:
@@ -76,14 +78,18 @@ def main():
             f"Downloaded {element_count} elements from all sources in {round(run_time * 1000, 1)}ms"
         )
 
+        db.close()
+
+    # Default parameters
     api_host = args.host if args.host else "localhost"
     api_port = args.port if args.port else 5000
 
+    # Create API object and run
     api = API(
         host=api_host,
         port=api_port,
         element_ttl=element_ttl,
-        database=db,
+        database_factory=database_factory,
         groups=groups,
         sources=sources,
     )

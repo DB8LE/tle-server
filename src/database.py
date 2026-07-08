@@ -52,11 +52,15 @@ class Database:
 
         self.conn = sqlite3.connect(path, check_same_thread=False)
 
+        # TODO: Move this to only run once?
         cur = self.conn.cursor()
         cur.execute(CREATE_ELEMENTS_TABLE_SQL)
         cur.execute(CREATE_GROUPS_TABLE_SQL)
         cur.close()
         self.conn.commit()
+
+    def close(self):
+        self.conn.close()
 
     def insert_elements(self, elements: List[Element]):
         logging.debug(f"Inserting {len(elements)} element(s) into database")
@@ -178,3 +182,11 @@ class Database:
         cur.close()
 
         return int(count)
+
+class DatabaseFactory:
+    def __init__(self, path: str, source_groups: Optional[Dict[str, List[str]]]):
+        self.path = path
+        self.source_groups = source_groups
+
+    def get_database(self) -> Database:
+        return Database(self.path, self.source_groups)
